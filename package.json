@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "obsidian-github-comments",
+	"version": "0.0.1",
+	"description": "Invite people to comment on the side of your notes, right in Obsidian! (https://github.com/NimbleNexus/obsidian-github-comments)",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
