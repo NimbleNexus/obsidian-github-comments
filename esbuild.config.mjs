@@ -1,6 +1,8 @@
+import "dotenv/config";
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import copyToVault from "./copyToVault.esbuild.plugin.mjs";
 
 const banner =
 `/*
@@ -38,6 +40,9 @@ const context = await esbuild.context({
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
 	outfile: "main.js",
+	plugins: [
+		copyToVault(process.env.COPY_TO_VAULT),
+	]
 });
 
 if (prod) {
