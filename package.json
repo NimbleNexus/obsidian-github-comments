@@ -19,6 +19,7 @@
 		"dotenv": "^16.1.4",
 		"esbuild": "0.17.3",
 		"obsidian": "latest",
+		"octokit": "^3.1.1",
 		"tslib": "2.4.0",
 		"typescript": "4.7.4"
 	}
