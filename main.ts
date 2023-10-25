@@ -1,5 +1,6 @@
-import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
+import { App, MarkdownView, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { Octokit } from "octokit";
+import { commentsMarginField, listComments } from "src/CommentsMarginPlugin";
 
 interface GitHubCommentsSettings {
 	gh_token?: string;
@@ -14,6 +15,8 @@ export default class GitHubComments extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+
+		this.registerEditorExtension([ commentsMarginField ]);
 
 		if (this.settings.gh_token && this.settings.owner && this.settings.repo) {
 			const octokit = new Octokit({
@@ -36,16 +39,73 @@ export default class GitHubComments extends Plugin {
 
 			const ref = comments.data.at(-1)?.commit_id!;
 
-			const commit = await octokit.request("GET /repos/{owner}/{repo}/commits/{ref}", {
-				owner,
-				repo,
-				ref,
-				headers: {
-					"X-GitHub-Api-Version": "2022-11-28",
-				},
-			});
+			const commit = await octokit.request(
+				"GET /repos/{owner}/{repo}/commits/{ref}",
+				{
+					owner,
+					repo,
+					ref,
+					headers: {
+						"X-GitHub-Api-Version": "2022-11-28",
+					},
+				}
+			);
 
 			console.log(comments, commit);
+
+			const updateForPath = (activePath: string) => {
+				const listCommentsValue = Array.from(
+					comments.data
+						.filter(({ path }) => path === activePath)
+						// GROUP BY `${line}:${position}`
+						// SORT BY `created_at`
+						// PICK FIRST
+						.reduce((acc, comment) => {
+							const key = `${comment.line}:${comment.position}`;
+							if (!acc.has(key)) {
+								acc.set(key, { comment, commentCount: 1 });
+							} else {
+								const accValue = acc.get(key)!; // TODO: Should TypeScript infer from the if-else clause and `.has()`?
+								accValue.commentCount++;
+								if(comment.created_at < accValue.comment.created_at) {
+									accValue.comment = comment;
+								}
+							}
+							return acc;
+						}, new Map<string, { comment: (typeof comments.data)[number], commentCount: number }>())
+						.values()
+				).map(({ comment: { line, node_id }, commentCount }) => ({
+					lineNum: line!, // TODO: Why would this ever be undefined?
+					threadId: node_id,
+					commentCount,
+				}));
+
+				// Get the active view
+				const view =
+					this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (view) {
+					// @ts-expect-error, not typed
+					const editorView = view.editor.cm as EditorView;
+
+					editorView.dispatch({
+						effects: listComments.of(listCommentsValue),
+					});
+				}
+			};
+
+			// Update for the active file when the plugin loads
+			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			if (view) {
+				updateForPath(view.file!.path);
+			}
+
+			// Update for the active file when the active file changes
+			this.registerEvent(
+				this.app.workspace.on("file-open", (leaf) => {
+					if (!leaf) return;
+					updateForPath(leaf.path);
+				})
+			);
 		}
 
 		this.addSettingTab(new GitHubCommentsSettingTab(this.app, this));
