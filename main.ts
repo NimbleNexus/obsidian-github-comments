@@ -1,5 +1,6 @@
-import { App, MarkdownView, Plugin, PluginSettingTab, Setting } from "obsidian";
+import { App, MarkdownView, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
 import { Octokit } from "octokit";
+import { CommentThreadView, COMMENT_THREAD_VIEW } from "src/CommentThreadView";
 import { commentsMarginField, listComments } from "src/CommentsMarginPlugin";
 
 interface GitHubCommentsSettings {
@@ -76,8 +77,8 @@ export default class GitHubComments extends Plugin {
 						.values()
 				).map(({ comment: { line, node_id }, commentCount }) => ({
 					lineNum: line!, // TODO: Why would this ever be undefined?
-					threadId: node_id,
 					commentCount,
+					click: () => this.activateView(node_id),
 				}));
 
 				// Get the active view
@@ -109,9 +110,37 @@ export default class GitHubComments extends Plugin {
 		}
 
 		this.addSettingTab(new GitHubCommentsSettingTab(this.app, this));
+
+		this.registerView(COMMENT_THREAD_VIEW, (leaf) => new CommentThreadView(leaf));
+
+		// TODO: Add command "Open GitHub comment thread at cursor"
 	}
 
 	onunload() {}
+
+	async activateView(threadId: string) {
+		let { workspace } = this.app;
+
+		let leaf: WorkspaceLeaf | null = null;
+		let leaves = workspace.getLeavesOfType(COMMENT_THREAD_VIEW);
+
+		if (leaves.length > 0) {
+			// A leaf with our view already exists, use that
+			leaf = leaves[0];
+		} else {
+			// Our view could not be found in the workspace, create a new leaf
+			// in the right sidebar for it
+			leaf = workspace.getRightLeaf(false);
+		}
+		await leaf.setViewState({
+			type: COMMENT_THREAD_VIEW,
+			active: true,
+			state: { threadId },
+		});
+
+		// "Reveal" the leaf in case it is in a collapsed sidebar
+		workspace.revealLeaf(leaf);
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(

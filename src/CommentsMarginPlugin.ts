@@ -14,8 +14,8 @@ import {
 
 export interface CommentWidgetData {
 	lineNum: number;
-	threadId: string;
 	commentCount: number;
+	click: () => void;
 }
 
 export class CommentWidget extends WidgetType {
@@ -34,7 +34,7 @@ export class CommentWidget extends WidgetType {
 		span.style.userSelect = "none";
 		span.style.cursor = "pointer";
 		span.ariaLabel = `Comment on line ${this.data.lineNum}`;
-		span.onclick = () => console.log(`Comment icon clicked for thread of ${this.data.threadId}`);
+		span.onclick = () => this.data.click();
 		return span;
 	}
 }
