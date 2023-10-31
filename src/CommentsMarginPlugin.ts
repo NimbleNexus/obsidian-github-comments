@@ -1,12 +1,12 @@
 import { RangeSetBuilder } from "@codemirror/state";
 import {
 	Decoration,
-	DecorationSet,
+	type DecorationSet,
 	EditorView,
 	WidgetType,
 } from "@codemirror/view";
 import {
-	Extension,
+	type Extension,
 	StateEffect,
 	StateField,
 	Transaction,

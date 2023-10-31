@@ -11,7 +11,7 @@ interface GitHubCommentsSettings {
 const DEFAULT_SETTINGS: GitHubCommentsSettings = {};
 
 export default class GitHubComments extends Plugin {
-	settings: GitHubCommentsSettings;
+	settings!: GitHubCommentsSettings;
 
 	async onload() {
 		await this.loadSettings();
