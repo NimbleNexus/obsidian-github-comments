@@ -36,7 +36,8 @@ export default class GitHubComments extends Plugin {
 
 				console.log($comments);
 
-				const updateForPath = (activePath: string) => {
+				const updateForMarkdownView = (view: MarkdownView) => {
+					const activePath = view.file!.path;
 					const listCommentsValue = Array.from(
 						$comments
 							.filter(({ path }) => path === activePath)
@@ -63,30 +64,32 @@ export default class GitHubComments extends Plugin {
 						click: () => this.activateView(node_id),
 					}));
 
-					// Get the active view
-					const view =
-						this.app.workspace.getActiveViewOfType(MarkdownView);
-					if (view) {
-						// @ts-expect-error, not typed
-						const editorView = view.editor.cm as EditorView;
+					// @ts-expect-error, not typed
+					const editorView = view.editor.cm as EditorView;
 
-						editorView.dispatch({
-							effects: listComments.of(listCommentsValue),
-						});
-					}
+					editorView.dispatch({
+						effects: listComments.of(listCommentsValue),
+					});
 				};
 
 				// Update for the active file when the plugin loads
-				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (view) {
-					updateForPath(view.file!.path);
-				}
+				this.app.workspace.iterateAllLeaves((leaf) => {
+					if (leaf.view && leaf.view instanceof MarkdownView) {
+						updateForMarkdownView(leaf.view);
+					}
+				})
 
 				// Update for the active file when the active file changes
 				this.registerEvent(
 					this.app.workspace.on("file-open", (leaf) => {
 						if (!leaf) return;
-						updateForPath(leaf.path);
+						const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+						if (!view) return;
+						if (view.file?.path !== leaf.path) {
+							console.error(`Active view path ${view.file?.path} does not match leaf path ${leaf.path}`)
+							return;
+						}
+						updateForMarkdownView(view);
 					})
 				);
 			})
@@ -124,6 +127,8 @@ export default class GitHubComments extends Plugin {
 		// "Reveal" the leaf in case it is in a collapsed sidebar
 		workspace.revealLeaf(leaf);
 	}
+
+	// TODO: On Settings Change, load or clear comments
 
 	async loadSettings() {
 		this.settings = Object.assign(
