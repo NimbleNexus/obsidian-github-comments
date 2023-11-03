@@ -5,7 +5,7 @@ import { jsonFileCachedWritable } from './jsonFileCachedWritable';
 import { type Vault } from 'obsidian';
 
 const COMMENTS_ROUTE = "GET /repos/{owner}/{repo}/comments";
-type Comments = Endpoints[typeof COMMENTS_ROUTE]["response"]["data"];
+export type Comments = Endpoints[typeof COMMENTS_ROUTE]["response"]["data"];
 
 export function commentsStore({ octokit, owner, repo }: { octokit: Octokit, owner: string; repo: string }, filename: string, vault: Vault) {
 	const store = jsonFileCachedWritable<Comments>(filename, vault);
@@ -29,4 +29,8 @@ export function commentsStore({ octokit, owner, repo }: { octokit: Octokit, owne
 		forFile: (path: string) => derived(store, ($comments) => $comments?.filter(({ path: commentPath }) => commentPath === path)),
 		refresh,
 	};
+}
+
+export function threadKeyOf(comment: Comments[0]) {
+	return `${comment.path}:${comment.line}:${comment.position}`;
 }

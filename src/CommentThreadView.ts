@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf, type ViewStateResult } from "obsidian";
 
 import CommentThread from "./CommentThread.svelte";
+import { type Comments } from "./stores/comments";
 
 export const COMMENT_THREAD_VIEW = "ogc-comment-thread-view";
 
@@ -23,14 +24,14 @@ export class CommentThreadView extends ItemView {
 		this.component = new CommentThread({
 			target: this.contentEl,
 			props: {
-				threadId: undefined,
+				comments: []
 			},
 		});
 	}
 
-	setState(state: { threadId: string }, result: ViewStateResult): Promise<void> {
-		if (this.component) {
-			this.component.$set({ threadId: state.threadId });
+	setState(state: { comments?: Comments }, result: ViewStateResult): Promise<void> {
+		if (this.component && state.comments) {
+			this.component.$set({ comments: state.comments });
 		}
 		return super.setState(state, result);
 	}

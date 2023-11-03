@@ -2,7 +2,7 @@ import { App, MarkdownView, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } f
 import { Octokit } from "octokit";
 import { CommentThreadView, COMMENT_THREAD_VIEW } from "src/CommentThreadView";
 import { commentsMarginField, listComments } from "src/CommentsMarginPlugin";
-import { commentsStore } from "src/stores/comments";
+import { commentsStore, type Comments, threadKeyOf } from "src/stores/comments";
 
 interface GitHubCommentsSettings {
 	gh_token?: string;
@@ -45,23 +45,20 @@ export default class GitHubComments extends Plugin {
 							// SORT BY `created_at`
 							// PICK FIRST
 							.reduce((acc, comment) => {
-								const key = `${comment.line}:${comment.position}`;
+								const key = threadKeyOf(comment);
 								if (!acc.has(key)) {
-									acc.set(key, { comment, commentCount: 1 });
+									acc.set(key, [ comment ]);
 								} else {
 									const accValue = acc.get(key)!; // TODO: Should TypeScript infer from the if-else clause and `.has()`?
-									accValue.commentCount++;
-									if(comment.created_at < accValue.comment.created_at) {
-										accValue.comment = comment;
-									}
+									accValue.push(comment);
 								}
 								return acc;
-							}, new Map<string, { comment: (typeof $comments)[number], commentCount: number }>())
+							}, new Map<string, Comments>())
 							.values()
-					).map(({ comment: { line, node_id }, commentCount }) => ({
-						lineNum: line!, // TODO: Why would this ever be undefined?
-						commentCount,
-						click: () => this.activateView(node_id),
+					).map((comments) => ({
+						lineNum: comments[0].line!, // TODO: Why would this ever be undefined?
+						commentCount: comments.length,
+						click: () => this.activateView(comments), // TODO: Consider passing the threadKey instead
 					}));
 
 					// @ts-expect-error, not typed
@@ -104,7 +101,7 @@ export default class GitHubComments extends Plugin {
 
 	onunload() {}
 
-	async activateView(threadId: string) {
+	async activateView(comments: Comments) {
 		let { workspace } = this.app;
 
 		let leaf: WorkspaceLeaf | null = null;
@@ -121,7 +118,7 @@ export default class GitHubComments extends Plugin {
 		await leaf.setViewState({
 			type: COMMENT_THREAD_VIEW,
 			active: true,
-			state: { threadId },
+			state: { comments },
 		});
 
 		// "Reveal" the leaf in case it is in a collapsed sidebar
