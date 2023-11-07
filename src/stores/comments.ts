@@ -62,5 +62,9 @@ export function commentsStore({ octokit, owner, repo }: { octokit: Octokit, owne
 }
 
 export function threadKeyOf(comment: ThreadLocation | Comments[0]) {
-	return `${comment.path}:${comment.line}:${comment.position}`;
+	if ("commit_sha" in comment) {
+		return `${comment.commit_sha}:${comment.path}:${comment.line}:${comment.position}`;
+	} else {
+		return `${comment.commit_id}:${comment.path}:${comment.line}:${comment.position}`;
+	}
 }
