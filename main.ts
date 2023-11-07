@@ -1,6 +1,6 @@
 import { App, MarkdownView, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
 import { Octokit } from "octokit";
-import { CommentThreadView, COMMENT_THREAD_VIEW } from "src/CommentThreadView";
+import { CommentThreadView, COMMENT_THREAD_VIEW, type CommentThreadViewState } from "src/CommentThreadView";
 import { commentsMarginField, listComments } from "src/CommentsMarginPlugin";
 import { commentsStore, type Comments, threadKeyOf } from "src/stores/comments";
 
@@ -55,11 +55,14 @@ export default class GitHubComments extends Plugin {
 								return acc;
 							}, new Map<string, Comments>())
 							.values()
-					).map((comments) => ({
-						lineNum: comments[0].line!, // TODO: Why would this ever be undefined?
-						commentCount: comments.length,
-						click: () => this.activateView(comments), // TODO: Consider passing the threadKey instead
-					}));
+					).map((comments) => {
+						const [{ path, line, position }] = comments;
+						return {
+							lineNum: line!, // TODO: Why would this ever be undefined?
+							commentCount: comments.length,
+							click: () => this.activateView({ threadLocation: { path: path!, line: line!, position: position! }, comments }), // TODO: Consider passing the threadKey instead
+						};
+					});
 
 					// @ts-expect-error, not typed
 					const editorView = view.editor.cm as EditorView;
@@ -77,6 +80,7 @@ export default class GitHubComments extends Plugin {
 				})
 
 				// Update for the active file when the active file changes
+				// TODO: Move this registerEvent outside of subscribe
 				this.registerEvent(
 					this.app.workspace.on("file-open", (leaf) => {
 						if (!leaf) return;
@@ -92,6 +96,15 @@ export default class GitHubComments extends Plugin {
 			})
 		}
 
+		// This event is fired by the CommentThreadView
+		this.registerEvent(
+			// @ts-expect-error
+			this.app.workspace.on("ogc:create-comment", async (...args) => {
+				// TODO: Create comment using data layer
+				console.info("TODO: Create comment:", ...args);
+			})
+		);
+
 		this.addSettingTab(new GitHubCommentsSettingTab(this.app, this));
 
 		this.registerView(COMMENT_THREAD_VIEW, (leaf) => new CommentThreadView(leaf));
@@ -101,7 +114,7 @@ export default class GitHubComments extends Plugin {
 
 	onunload() {}
 
-	async activateView(comments: Comments) {
+	async activateView(state: CommentThreadViewState) {
 		let { workspace } = this.app;
 
 		let leaf: WorkspaceLeaf | null = null;
@@ -118,7 +131,7 @@ export default class GitHubComments extends Plugin {
 		await leaf.setViewState({
 			type: COMMENT_THREAD_VIEW,
 			active: true,
-			state: { comments },
+			state,
 		});
 
 		// "Reveal" the leaf in case it is in a collapsed sidebar

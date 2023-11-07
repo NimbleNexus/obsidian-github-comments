@@ -7,6 +7,12 @@ import { type Vault } from 'obsidian';
 const COMMENTS_ROUTE = "GET /repos/{owner}/{repo}/comments";
 export type Comments = Endpoints[typeof COMMENTS_ROUTE]["response"]["data"];
 
+export type ThreadLocation = {
+	path: string;
+	line: number;
+	position: number;
+};
+
 export function commentsStore({ octokit, owner, repo }: { octokit: Octokit, owner: string; repo: string }, filename: string, vault: Vault) {
 	const store = jsonFileCachedWritable<Comments>(filename, vault);
 	
@@ -31,6 +37,6 @@ export function commentsStore({ octokit, owner, repo }: { octokit: Octokit, owne
 	};
 }
 
-export function threadKeyOf(comment: Comments[0]) {
+export function threadKeyOf(comment: ThreadLocation | Comments[0]) {
 	return `${comment.path}:${comment.line}:${comment.position}`;
 }

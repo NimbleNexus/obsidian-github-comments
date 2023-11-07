@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { type Comments } from "./stores/comments";
+	import { type Comments, type ThreadLocation } from "./stores/comments";
 
-	export let comments: Comments;
+	export let threadLocation: ThreadLocation | undefined = undefined;
+	export let comments: Comments = [];
+    export let createComment: ((_: { threadLocation: ThreadLocation, body: string }) => void) | undefined = undefined;
+	let newComment = '';
 </script>
 
 <div class="ogc-comment-thread">
@@ -20,6 +23,15 @@
 		{/each}
 	{:else}
 		No comments to show.
+	{/if}
+
+	{#if threadLocation && createComment}
+		<div class="ogc-new-comment">
+			<!-- TODO: Persist contents of new comment drafts based on threadKey -->
+			<textarea bind:value={newComment} placeholder="Reply..."></textarea>
+			<button on:click={() => threadLocation && createComment && createComment({ threadLocation, body: newComment })}>Add single comment</button>
+			<!-- TODO: Add Cancel button and the associated functionality -->
+		</div>
 	{/if}
 </div>
 
@@ -44,5 +56,15 @@
 	.ogc-comment {
 		margin-left: 24px;
 		margin-bottom: 12px;
+	}
+
+	.ogc-new-comment {
+		margin-top: 24px;
+		margin-left: 24px;
+	}
+
+	.ogc-new-comment textarea {
+		min-height: 32px;
+		resize: vertical;
 	}
 </style>
