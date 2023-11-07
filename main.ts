@@ -24,29 +24,7 @@ export default class GitHubComments extends Plugin {
 
 		this.registerEditorExtension([ commentsMarginField ]);
 
-		if (this.settings.gh_token && this.settings.owner && this.settings.repo) {
-			const octokit = new Octokit({
-				auth: this.settings.gh_token,
-			});
-
-			const owner = this.settings.owner;
-			const repo = this.settings.repo;
-
-			const comments = this.comments = commentsStore({ octokit, owner, repo }, `.obsidian/plugins/${this.manifest.id}/comments.json`, this.app.vault);
-			comments.refresh(); // TODO: Refresh only after enough time has passed or on command
-
-			if (this.commentsUnsubscribe) this.commentsUnsubscribe();
-			this.commentsUnsubscribe = comments.subscribe(($comments) => {
-				if (!$comments) return; // TODO: Can we have it not emit until it has a value?
-
-				// Update for the active file when the plugin loads
-				this.app.workspace.iterateAllLeaves((leaf) => {
-					if (leaf.view && leaf.view instanceof MarkdownView) {
-						this.decorateMarkdownView(leaf.view, $comments);
-					}
-				})
-			})
-		}
+		this.initializeDataLayer();
 
 		// Update for the active file when the active file changes
 		this.registerEvent(
@@ -121,6 +99,36 @@ export default class GitHubComments extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	initializeDataLayer() {
+		// TODO: If settings unset, clear comments
+		// TODO: If settings the same, do nothing
+		// TODO: If API call fails, warn the user and clear comments
+		// TODO: Instead of clearing comments, offer to keep the comments cache
+		if (this.settings.gh_token && this.settings.owner && this.settings.repo) {
+			const octokit = new Octokit({
+				auth: this.settings.gh_token,
+			});
+
+			const owner = this.settings.owner;
+			const repo = this.settings.repo;
+
+			const comments = this.comments = commentsStore({ octokit, owner, repo }, `.obsidian/plugins/${this.manifest.id}/comments.json`, this.app.vault);
+			comments.refresh(); // TODO: Refresh only after enough time has passed or on command
+
+			if (this.commentsUnsubscribe) this.commentsUnsubscribe();
+			this.commentsUnsubscribe = comments.subscribe(($comments) => {
+				if (!$comments) return; // TODO: Can we have it not emit until it has a value?
+
+				// Update for the active file when the plugin loads
+				this.app.workspace.iterateAllLeaves((leaf) => {
+					if (leaf.view && leaf.view instanceof MarkdownView) {
+						this.decorateMarkdownView(leaf.view, $comments);
+					}
+				})
+			})
+		}
 	}
 
 	decorateMarkdownView(view: MarkdownView, $comments: Comments) {
