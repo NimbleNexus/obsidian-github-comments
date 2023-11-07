@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { type Comments, type ThreadLocation } from "./stores/comments";
+	import { type Comments, type CreateCommentsParams, type ThreadLocation } from "./stores/comments";
 
 	export let threadLocation: ThreadLocation | undefined = undefined;
 	export let comments: Comments = [];
-    export let createComment: ((_: { threadLocation: ThreadLocation, body: string }) => void) | undefined = undefined;
+    export let createComment: ((_: CreateCommentsParams) => void) | undefined = undefined;
 	let newComment = '';
 </script>
 

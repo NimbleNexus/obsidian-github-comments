@@ -29,5 +29,11 @@ export function jsonFileCachedWritable<T>(filename: string, vault: Vault) {
 			writeToFile(value);
 			store.set(value);
 		},
+		update: (updater: (value: T) => T) => {
+			store.update((value: T) => {
+				writeToFile(value);
+				return updater(value);
+			});
+		},
 	};
 }

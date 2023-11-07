@@ -4,7 +4,17 @@ import { Octokit } from "octokit";
 import { get } from "svelte/store";
 import { CommentThreadView, COMMENT_THREAD_VIEW, type CommentThreadViewState } from "src/CommentThreadView";
 import { commentsMarginField, listComments } from "src/CommentsMarginPlugin";
-import { commentsStore, type Comments, threadKeyOf } from "src/stores/comments";
+import { commentsStore, type Comments, threadKeyOf, type CreateCommentsParams } from "src/stores/comments";
+
+declare module "obsidian" {
+	interface Workspace {
+		on(
+			eventName: "ogc:create-comment",
+			callback: (createCommentsParams: CreateCommentsParams) => any,
+			ctx?: any
+		): EventRef;
+	}
+}
 
 interface GitHubCommentsSettings {
 	gh_token?: string;
@@ -45,10 +55,9 @@ export default class GitHubComments extends Plugin {
 
 		// This event is fired by the CommentThreadView
 		this.registerEvent(
-			// @ts-expect-error
-			this.app.workspace.on("ogc:create-comment", async (...args) => {
-				// TODO: Create comment using data layer
-				console.info("TODO: Create comment:", ...args);
+			this.app.workspace.on("ogc:create-comment", (createCommentsParams) => {
+				if (!this.comments) return;
+				this.comments.create(createCommentsParams);
 			})
 		);
 
@@ -151,11 +160,11 @@ export default class GitHubComments extends Plugin {
 				}, new Map<string, Comments>())
 				.values()
 		).map((comments) => {
-			const [{ path, line, position }] = comments;
+			const [{ commit_id, path, line, position }] = comments;
 			return {
 				lineNum: line!, // TODO: Why would this ever be undefined?
 				commentCount: comments.length,
-				click: () => this.activateView({ threadLocation: { path: path!, line: line!, position: position! }, comments }), // TODO: Consider passing the threadKey instead
+				click: () => this.activateView({ threadLocation: { commit_sha: commit_id!, path: path!, line: line!, position: position! }, comments }),
 			};
 		});
 
