@@ -1,5 +1,7 @@
 import { App, MarkdownView, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
+import { EditorView } from "@codemirror/view";
 import { Octokit } from "octokit";
+import { get } from "svelte/store";
 import { CommentThreadView, COMMENT_THREAD_VIEW, type CommentThreadViewState } from "src/CommentThreadView";
 import { commentsMarginField, listComments } from "src/CommentsMarginPlugin";
 import { commentsStore, type Comments, threadKeyOf } from "src/stores/comments";
@@ -14,6 +16,8 @@ const DEFAULT_SETTINGS: GitHubCommentsSettings = {};
 
 export default class GitHubComments extends Plugin {
 	settings!: GitHubCommentsSettings;
+	comments?: ReturnType<typeof commentsStore>;
+	commentsUnsubscribe?: () => void;
 
 	async onload() {
 		await this.loadSettings();
@@ -28,73 +32,38 @@ export default class GitHubComments extends Plugin {
 			const owner = this.settings.owner;
 			const repo = this.settings.repo;
 
-			const comments = commentsStore({ octokit, owner, repo }, `.obsidian/plugins/${this.manifest.id}/comments.json`, this.app.vault);
+			const comments = this.comments = commentsStore({ octokit, owner, repo }, `.obsidian/plugins/${this.manifest.id}/comments.json`, this.app.vault);
 			comments.refresh(); // TODO: Refresh only after enough time has passed or on command
 
-			comments.subscribe(($comments) => {
+			if (this.commentsUnsubscribe) this.commentsUnsubscribe();
+			this.commentsUnsubscribe = comments.subscribe(($comments) => {
 				if (!$comments) return; // TODO: Can we have it not emit until it has a value?
-
-				console.log($comments);
-
-				const updateForMarkdownView = (view: MarkdownView) => {
-					const activePath = view.file!.path;
-					const listCommentsValue = Array.from(
-						$comments
-							.filter(({ path }) => path === activePath)
-							// GROUP BY `${line}:${position}`
-							// SORT BY `created_at`
-							// PICK FIRST
-							.reduce((acc, comment) => {
-								const key = threadKeyOf(comment);
-								if (!acc.has(key)) {
-									acc.set(key, [ comment ]);
-								} else {
-									const accValue = acc.get(key)!; // TODO: Should TypeScript infer from the if-else clause and `.has()`?
-									accValue.push(comment);
-								}
-								return acc;
-							}, new Map<string, Comments>())
-							.values()
-					).map((comments) => {
-						const [{ path, line, position }] = comments;
-						return {
-							lineNum: line!, // TODO: Why would this ever be undefined?
-							commentCount: comments.length,
-							click: () => this.activateView({ threadLocation: { path: path!, line: line!, position: position! }, comments }), // TODO: Consider passing the threadKey instead
-						};
-					});
-
-					// @ts-expect-error, not typed
-					const editorView = view.editor.cm as EditorView;
-
-					editorView.dispatch({
-						effects: listComments.of(listCommentsValue),
-					});
-				};
 
 				// Update for the active file when the plugin loads
 				this.app.workspace.iterateAllLeaves((leaf) => {
 					if (leaf.view && leaf.view instanceof MarkdownView) {
-						updateForMarkdownView(leaf.view);
+						this.decorateMarkdownView(leaf.view, $comments);
 					}
 				})
-
-				// Update for the active file when the active file changes
-				// TODO: Move this registerEvent outside of subscribe
-				this.registerEvent(
-					this.app.workspace.on("file-open", (leaf) => {
-						if (!leaf) return;
-						const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-						if (!view) return;
-						if (view.file?.path !== leaf.path) {
-							console.error(`Active view path ${view.file?.path} does not match leaf path ${leaf.path}`)
-							return;
-						}
-						updateForMarkdownView(view);
-					})
-				);
 			})
 		}
+
+		// Update for the active file when the active file changes
+		this.registerEvent(
+			this.app.workspace.on("file-open", (leaf) => {
+				if (!leaf) return;
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (!view) return;
+				if (view.file?.path !== leaf.path) {
+					console.error(`Active view path ${view.file?.path} does not match leaf path ${leaf.path}`)
+					return;
+				}
+				if (this.comments) {
+					const $comments = get(this.comments);
+					this.decorateMarkdownView(view, $comments);
+				}
+			})
+		);
 
 		// This event is fired by the CommentThreadView
 		this.registerEvent(
@@ -112,7 +81,9 @@ export default class GitHubComments extends Plugin {
 		// TODO: Add command "Open GitHub comment thread at cursor"
 	}
 
-	onunload() {}
+	onunload() {
+		if (this.commentsUnsubscribe) this.commentsUnsubscribe();
+	}
 
 	async activateView(state: CommentThreadViewState) {
 		let { workspace } = this.app;
@@ -150,6 +121,42 @@ export default class GitHubComments extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	decorateMarkdownView(view: MarkdownView, $comments: Comments) {
+		const activePath = view.file!.path;
+		const listCommentsValue = Array.from(
+			$comments
+				.filter(({ path }) => path === activePath)
+				// GROUP BY `${line}:${position}`
+				// SORT BY `created_at`
+				// PICK FIRST
+				.reduce((acc, comment) => {
+					const key = threadKeyOf(comment);
+					if (!acc.has(key)) {
+						acc.set(key, [ comment ]);
+					} else {
+						const accValue = acc.get(key)!; // TODO: Should TypeScript infer from the if-else clause and `.has()`?
+						accValue.push(comment);
+					}
+					return acc;
+				}, new Map<string, Comments>())
+				.values()
+		).map((comments) => {
+			const [{ path, line, position }] = comments;
+			return {
+				lineNum: line!, // TODO: Why would this ever be undefined?
+				commentCount: comments.length,
+				click: () => this.activateView({ threadLocation: { path: path!, line: line!, position: position! }, comments }), // TODO: Consider passing the threadKey instead
+			};
+		});
+
+		// @ts-expect-error, not typed
+		const editorView = view.editor.cm as EditorView;
+
+		editorView.dispatch({
+			effects: listComments.of(listCommentsValue),
+		});
 	}
 }
 
