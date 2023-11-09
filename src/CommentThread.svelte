@@ -1,16 +1,20 @@
 <script lang="ts">
-	import { type Comments, type CreateCommentsParams, type ThreadLocation } from "./stores/comments";
+	import { commentsStore, type CreateCommentsParams, type ThreadLocation } from "./stores/comments";
 
 	export let threadLocation: ThreadLocation | undefined = undefined;
-	export let comments: Comments = [];
+	export let comments: ReturnType<typeof commentsStore> | undefined = undefined;
     export let createComment: ((_: CreateCommentsParams) => void) | undefined = undefined;
+	let threadComments: ReturnType<ReturnType<typeof commentsStore>['forThreadLocation']> | undefined = undefined;
+	$: threadComments = threadLocation && comments && comments.forThreadLocation(threadLocation);
 	let newComment = '';
+	function clearNewCommentWhenThreadUpdated() { newComment = ''; }
+	$: $threadComments, clearNewCommentWhenThreadUpdated()
 </script>
 
 <div class="ogc-comment-thread">
-	{#if comments.length}
-		<h3>Comments for {comments[0].path}</h3>
-		{#each comments as comment}
+	{#if $threadComments && $threadComments.length}
+		<h3>Comments for {$threadComments[0].path}</h3>
+		{#each $threadComments as comment}
 			<!-- User Info -->
 			<div class="ogc-comment-user-info">
 				<img src={comment?.user?.avatar_url} class="avatar circle" alt={`@${comment?.user?.login}`} width="24" height="24" />

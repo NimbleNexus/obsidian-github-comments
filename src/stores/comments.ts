@@ -56,9 +56,22 @@ export function commentsStore({ octokit, owner, repo }: { octokit: Octokit, owne
 	return {
 		subscribe: store.subscribe,
 		forFile: (path: string) => derived(store, ($comments) => $comments?.filter(({ path: commentPath }) => commentPath === path)),
+		forThreadLocation: (threadLocation: ThreadLocation) => derived(store, ($comments) => $comments?.filter((comment) => doesThreadLocationMatchComment(threadLocation, comment))),
 		create,
 		refresh,
 	};
+}
+
+// Using more efficient method instead
+export function doesThreadLocationMatchComment(a: ThreadLocation, b: Comments[0]) {
+	return a.commit_sha === b.commit_id && a.path === b.path && a.line === b.line && a.position === b.position;
+}
+
+// Commit for future reference
+export function areThreadKeysEqual(a: ThreadLocation | Comments[0], b: ThreadLocation | Comments[0]) {
+	const commitA = "commit_sha" in a ? a.commit_sha : a.commit_id;
+	const commitB = "commit_sha" in b ? b.commit_sha : b.commit_id;
+	return commitA === commitB && a.path === b.path && a.line === b.line && a.position === b.position;
 }
 
 export function threadKeyOf(comment: ThreadLocation | Comments[0]) {

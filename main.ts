@@ -63,7 +63,7 @@ export default class GitHubComments extends Plugin {
 
 		this.addSettingTab(new GitHubCommentsSettingTab(this.app, this));
 
-		this.registerView(COMMENT_THREAD_VIEW, (leaf) => new CommentThreadView(leaf));
+		this.registerView(COMMENT_THREAD_VIEW, (leaf) => new CommentThreadView(leaf, this));
 
 		// TODO: Add command "Open GitHub comment thread at cursor"
 	}
@@ -164,7 +164,7 @@ export default class GitHubComments extends Plugin {
 			return {
 				lineNum: line!, // TODO: Why would this ever be undefined?
 				commentCount: comments.length,
-				click: () => this.activateView({ threadLocation: { commit_sha: commit_id!, path: path!, line: line!, position: position! }, comments }),
+				click: () => this.activateView({ threadLocation: { commit_sha: commit_id!, path: path!, line: line!, position: position! } }),
 			};
 		});
 

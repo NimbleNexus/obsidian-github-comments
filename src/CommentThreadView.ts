@@ -1,19 +1,19 @@
 import { ItemView, WorkspaceLeaf, type ViewStateResult } from "obsidian";
 
 import CommentThread from "./CommentThread.svelte";
-import { type Comments, type CreateCommentsParams, type ThreadLocation } from "./stores/comments";
+import { type CreateCommentsParams, type ThreadLocation } from "./stores/comments";
+import type GitHubComments from "main";
 
 export const COMMENT_THREAD_VIEW = "ogc-comment-thread-view";
 
 export interface CommentThreadViewState {
 	threadLocation?: ThreadLocation;
-	comments?: Comments;
 }
 
 export class CommentThreadView extends ItemView {
 	component?: CommentThread;
 
-	constructor(leaf: WorkspaceLeaf) {
+	constructor(leaf: WorkspaceLeaf, private plugin: GitHubComments) {
 		super(leaf);
 	}
 
@@ -34,6 +34,7 @@ export class CommentThreadView extends ItemView {
 	setState(state: CommentThreadViewState, result: ViewStateResult): Promise<void> {
 		if (this.component) {
 			this.component.$set({
+				comments: this.plugin.comments,
 				...state,
 				createComment: (createCommentsParams: CreateCommentsParams) => {
 					this.app.workspace.trigger("ogc:create-comment", createCommentsParams);
