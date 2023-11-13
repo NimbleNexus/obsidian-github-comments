@@ -1,10 +1,12 @@
 import { App, MarkdownView, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { Octokit } from "octokit";
+import { graphql } from "@octokit/graphql";
 import { get } from "svelte/store";
 import { CommentThreadView, COMMENT_THREAD_VIEW, type CommentThreadViewState } from "src/CommentThreadView";
 import { commentsMarginField, listComments } from "src/CommentsMarginPlugin";
 import { commentsStore, type Comments, threadKeyOf, type CreateCommentsParams } from "src/stores/comments";
+import { viewerStore } from "src/stores/viewer";
 
 declare module "obsidian" {
 	interface Workspace {
@@ -137,6 +139,18 @@ export default class GitHubComments extends Plugin {
 					}
 				})
 			})
+
+			const graphqlWithAuth = graphql.defaults({
+				headers: {
+					authorization: `token ${this.settings.gh_token}`,
+				},
+			});
+
+			const viewer = viewerStore(graphqlWithAuth);
+			viewer.refresh();
+			viewer.subscribe(($viewer) => {
+				console.log('viewer', $viewer);
+			});
 		}
 	}
 
