@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { afterUpdate } from 'svelte';
 	import { commentsStore, type CreateCommentsParams, type ThreadLocation } from "./stores/comments";
 
 	export let threadLocation: ThreadLocation | undefined = undefined;
@@ -9,11 +10,21 @@
 	let newComment = '';
 	function clearNewCommentWhenThreadUpdated() { newComment = ''; }
 	$: $threadComments, clearNewCommentWhenThreadUpdated()
+
+	let textareaEl: HTMLTextAreaElement | undefined = undefined;
+	afterUpdate(() => {
+		if (textareaEl && !($threadComments && $threadComments.length)) {
+			textareaEl.focus();
+		}
+	});
 </script>
 
 <div class="ogc-comment-thread">
+	{#if threadLocation}
+		<h3>Comments for {threadLocation.path}</h3>
+		<!-- TODO: Add information about the rest of threadLocation and link to GitHub -->
+	{/if}
 	{#if $threadComments && $threadComments.length}
-		<h3>Comments for {$threadComments[0].path}</h3>
 		{#each $threadComments as comment}
 			<!-- User Info -->
 			<div class="ogc-comment-user-info">
@@ -32,7 +43,7 @@
 	{#if threadLocation && createComment}
 		<div class="ogc-new-comment">
 			<!-- TODO: Persist contents of new comment drafts based on threadKey -->
-			<textarea bind:value={newComment} placeholder="Reply..."></textarea>
+			<textarea bind:this={textareaEl} bind:value={newComment} placeholder="Reply..."></textarea>
 			<button on:click={() => threadLocation && createComment && createComment({ threadLocation, body: newComment })}>Add single comment</button>
 			<!-- TODO: Add Cancel button and the associated functionality -->
 		</div>
@@ -68,6 +79,7 @@
 	}
 
 	.ogc-new-comment textarea {
+		width: 100%;
 		min-height: 32px;
 		resize: vertical;
 	}

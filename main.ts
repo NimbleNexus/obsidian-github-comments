@@ -83,13 +83,6 @@ export default class GitHubComments extends Plugin {
 
 				const line = editor.getCursor().line + 1;
 
-				const sel = editor.getSelection();
-				console.log(
-					`For path ${path}; at line: ${line}; you have selected: ${JSON.stringify(
-						sel
-					)}`
-				);
-
 				if (!this.octokit || !this.graphqlWithAuth || !this.settings.owner || !this.settings.repo || !this.comments) {
 					console.error("GitHub Comments: GraphQL client not initialized. Check auth, owner and repo your settings and try again.");
 					return;
@@ -122,24 +115,14 @@ export default class GitHubComments extends Plugin {
 
 				const position = getInsertPositionForLine(patch!, line);
 
-				// TODO: Body obtained from user input (a view)
-				const body = "This comment is created from code!";
-
-				const createCommentsParams: CreateCommentsParams = {
-					threadLocation: {
-						commit_sha,
-						path,
-						line,
-						position,
-					},
-					body: `${(sel || "") && `context: ${JSON.stringify(sel)}\n\n`}${body}`,
+				const threadLocation = {
+					commit_sha,
+					path,
+					line,
+					position,
 				};
 
-				console.log(
-					"Creating comment using params",
-					createCommentsParams
-				);
-				this.comments.create(createCommentsParams);
+				this.activateView({ threadLocation });
 			},
 		});
 
@@ -171,6 +154,8 @@ export default class GitHubComments extends Plugin {
 			active: true,
 			state,
 		});
+
+		// TODO: Reveal active line in the editor
 
 		// "Reveal" the leaf in case it is in a collapsed sidebar
 		workspace.revealLeaf(leaf);
@@ -258,7 +243,7 @@ export default class GitHubComments extends Plugin {
 				commentCount: comments.length,
 				click: () => this.activateView({ threadLocation: { commit_sha: commit_id!, path: path!, line: line!, position: position! } }),
 			};
-		});
+		}).sort((a, b) => a.lineNum - b.lineNum);
 
 		// @ts-expect-error, not typed
 		const editorView = view.editor.cm as EditorView;
