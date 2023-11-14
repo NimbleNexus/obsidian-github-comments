@@ -1,4 +1,4 @@
-import { App, MarkdownView, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
+import { App, MarkdownView, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, type MarkdownFileInfo, Editor } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { Octokit } from "octokit";
 import { graphql } from "@octokit/graphql";
@@ -7,6 +7,8 @@ import { CommentThreadView, COMMENT_THREAD_VIEW, type CommentThreadViewState } f
 import { commentsMarginField, listComments } from "src/CommentsMarginPlugin";
 import { commentsStore, type Comments, threadKeyOf, type CreateCommentsParams } from "src/stores/comments";
 import { viewerStore } from "src/stores/viewer";
+import { blameStore } from "src/stores/blame";
+import { getInsertPositionForLine } from "src/utils/patch";
 
 declare module "obsidian" {
 	interface Workspace {
@@ -30,6 +32,8 @@ export default class GitHubComments extends Plugin {
 	settings!: GitHubCommentsSettings;
 	comments?: ReturnType<typeof commentsStore>;
 	commentsUnsubscribe?: () => void;
+	graphqlWithAuth?: typeof graphql;
+	octokit?: Octokit;
 
 	async onload() {
 		await this.loadSettings();
@@ -63,11 +67,85 @@ export default class GitHubComments extends Plugin {
 			})
 		);
 
+		this.addCommand({
+			id: "ogc:add-comment-at-cursor",
+			name: "Add comment at cursor",
+			hotkeys: [{ modifiers: ["Ctrl", "Alt"], key: "M" }], // TODO: Make this configurable
+			editorCallback: async (
+				editor: Editor,
+				view: MarkdownView | MarkdownFileInfo
+			) => {
+				const path = view.file?.path;
+				if (!path) {
+					console.error("GitHub Comments: No path for active view.");
+					return;
+				}
+
+				const line = editor.getCursor().line + 1;
+
+				const sel = editor.getSelection();
+				console.log(
+					`For path ${path}; at line: ${line}; you have selected: ${JSON.stringify(
+						sel
+					)}`
+				);
+
+				if (!this.octokit || !this.graphqlWithAuth || !this.settings.owner || !this.settings.repo || !this.comments) {
+					console.error("GitHub Comments: GraphQL client not initialized. Check auth, owner and repo your settings and try again.");
+					return;
+				}
+				const { owner, repo } = this.settings;
+
+				// TODO: This blame assumes HEAD, but we should use the commit of the workspace, if any
+				const blame = blameStore(this.graphqlWithAuth, { owner, repo, commitSha: "HEAD", path });
+				const blameResponse = await blame.refresh();
+				const [{ commit_sha }] = blameResponse.resource.blame.ranges
+					.filter(({ startingLine, endingLine }: any) => startingLine <= line && line <= endingLine)
+					.map(({ commit: { oid: commit_sha }}: { commit: { oid: string }}) => ({ commit_sha }))
+
+				const { data: commit } = await this.octokit.request("GET /repos/{owner}/{repo}/commits/{ref}", {
+					owner,
+					repo,
+					ref: commit_sha,
+					headers: {
+						"X-GitHub-Api-Version": "2022-11-28",
+					},
+				});
+				if (!commit) {
+					console.error("GitHub Comments: Commit not found for blame response", blameResponse);
+				}
+
+				const patch = commit.files?.find(({ filename }) => filename === path)?.patch;
+				if (!patch) {
+					console.error("GitHub Comments: Patch not found for commit", commit);
+				}
+
+				const position = getInsertPositionForLine(patch!, line);
+
+				// TODO: Body obtained from user input (a view)
+				const body = "This comment is created from code!";
+
+				const createCommentsParams: CreateCommentsParams = {
+					threadLocation: {
+						commit_sha,
+						path,
+						line,
+						position,
+					},
+					body: `${(sel || "") && `context: ${JSON.stringify(sel)}\n\n`}${body}`,
+				};
+
+				console.log(
+					"Creating comment using params",
+					createCommentsParams
+				);
+				this.comments.create(createCommentsParams);
+			},
+		});
+
 		this.addSettingTab(new GitHubCommentsSettingTab(this.app, this));
 
 		this.registerView(COMMENT_THREAD_VIEW, (leaf) => new CommentThreadView(leaf, this));
-
-		// TODO: Add command "Open GitHub comment thread at cursor"
 	}
 
 	onunload() {
@@ -118,7 +196,7 @@ export default class GitHubComments extends Plugin {
 		// TODO: If API call fails, warn the user and clear comments
 		// TODO: Instead of clearing comments, offer to keep the comments cache
 		if (this.settings.gh_token && this.settings.owner && this.settings.repo) {
-			const octokit = new Octokit({
+			const octokit = this.octokit = new Octokit({
 				auth: this.settings.gh_token,
 			});
 
@@ -140,7 +218,7 @@ export default class GitHubComments extends Plugin {
 				})
 			})
 
-			const graphqlWithAuth = graphql.defaults({
+			const graphqlWithAuth = this.graphqlWithAuth = graphql.defaults({
 				headers: {
 					authorization: `token ${this.settings.gh_token}`,
 				},
